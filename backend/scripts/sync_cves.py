@@ -41,10 +41,26 @@ def sync_cves_to_database(limit: int = None):
         
         for cve_data in cves:
             try:
-                # Extract CVE ID
-                cve_id = cve_data.get('id') or cve_data.get('cve_id')
+                # Extract CVE ID - handle both old and new CVE formats
+                cve_id = None
+                
+                # Try different field names for CVE ID
+                if 'id' in cve_data:
+                    cve_id = cve_data['id']
+                elif 'cve_id' in cve_data:
+                    cve_id = cve_data['cve_id']
+                elif 'cveMetadata' in cve_data and 'cveId' in cve_data['cveMetadata']:
+                    cve_id = cve_data['cveMetadata']['cveId']
+                elif 'CVE_data_meta' in str(cve_data):
+                    # Fallback for nested structures
+                    import re
+                    text = json.dumps(cve_data)
+                    match = re.search(r'CVE-(\d{4})-(\d+)', text)
+                    if match:
+                        cve_id = f"CVE-{match.group(1)}-{match.group(2)}"
+                
                 if not cve_id:
-                    print(f"⚠️  Skipping file without CVE ID: {cve_data}")
+                    print(f"⚠️  Skipping file without CVE ID: {str(cve_data)[:100]}...")
                     skipped += 1
                     continue
                 
@@ -59,6 +75,7 @@ def sync_cves_to_database(limit: int = None):
                 
                 # Map CVE data to Vulnerability model
                 vuln = Vulnerability(
+                    id=cve_id,  # Use CVE ID as primary key
                     cve_id=cve_id,
                     title=cve_data.get('title', f"{cve_id} Vulnerability"),
                     description=cve_data.get('description', ''),
@@ -66,7 +83,7 @@ def sync_cves_to_database(limit: int = None):
                     cvss_score=cve_data.get('cvss_score') or cve_data.get('metrics', {}).get('base_score'),
                     vendor=cve_data.get('vendor') or cve_data.get('configurations', [{}])[0].get('vendor', ''),
                     product=cve_data.get('product') or cve_data.get('configurations', [{}])[0].get('product', ''),
-                    published_date=_parse_date(cve_data.get('published_date') or cve_data.get('published'))
+                    published_date=_parse_date_to_datetime(cve_data.get('published_date') or cve_data.get('published'))
                 )
                 
                 db.add(vuln)
@@ -113,8 +130,42 @@ def _map_severity(severity_str: str) -> str:
     return severity_map.get(severity_str.lower(), 'medium')
 
 
+def _parse_date_to_datetime(date_str: str):
+    """Parse date string to datetime object"""
+    if not date_str:
+        return datetime.now()
+    
+    # Try common formats
+    formats = [
+        "%Y-%m-%d",
+        "%Y-%m-%dT%H:%M:%S",
+        "%Y-%m-%dT%H:%M:%SZ",
+        "%Y-%m-%dT%H:%M:%S.%fZ",
+        "%Y-%m-%dT%H:%M:%S.%f",
+        "%B %d, %Y"
+    ]
+    
+    for fmt in formats:
+        try:
+            return datetime.strptime(date_str, fmt)
+        except:
+            continue
+    
+    # If already ISO format or other string, try to extract date parts
+    try:
+        # Handle ISO format with timezone
+        if 'T' in date_str:
+            date_part = date_str.split('T')[0]
+            return datetime.strptime(date_part, "%Y-%m-%d")
+    except:
+        pass
+    
+    # Fallback to current datetime
+    return datetime.now()
+
+
 def _parse_date(date_str: str) -> str:
-    """Parse date string to ISO format"""
+    """Parse date string to ISO format (for reference)"""
     if not date_str:
         return datetime.now().isoformat()
     
@@ -123,15 +174,19 @@ def _parse_date(date_str: str) -> str:
         "%Y-%m-%d",
         "%Y-%m-%dT%H:%M:%S",
         "%Y-%m-%dT%H:%M:%SZ",
+        "%Y-%m-%dT%H:%M:%S.%fZ",
+        "%Y-%m-%dT%H:%M:%S.%f",
         "%B %d, %Y"
     ]
     
     for fmt in formats:
         try:
-            return datetime.strptime(date_str, fmt).isoformat()
+            dt = datetime.strptime(date_str, fmt)
+            return dt.isoformat()
         except:
             continue
     
+    # If already ISO format, return as-is
     return date_str
 
 

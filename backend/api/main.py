@@ -15,7 +15,6 @@ from database import engine, get_db
 from services import ollama_service, scraper_service
 from scheduler import start_schedulers
 from data_manager import data_manager
-from models import models
 import models
 import schemas
 
@@ -237,8 +236,7 @@ async def extract_iocs(
 # Scraper Endpoints
 @app.post("/api/scraper/run")
 async def run_scraper(
-    source_url: Optional[str] = None,
-    user: dict = Depends(get_current_user)
+    source_url: Optional[str] = None
 ):
     """Manually trigger scraper"""
     try:
@@ -253,7 +251,7 @@ async def run_scraper(
 
 
 @app.get("/api/scraper/sources")
-async def get_scraper_sources(user: dict = Depends(get_current_user)):
+async def get_scraper_sources():
     """Get list of configured scraper sources"""
     return {"sources": scraper_service.get_configured_sources()}
 

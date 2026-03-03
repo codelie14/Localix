@@ -16,7 +16,8 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime
 
 # Base directories
-DATA_DIR = Path(__file__).parent / "data"
+BASE_DIR = Path(__file__).resolve().parent
+DATA_DIR = BASE_DIR / "data"
 CVES_DIR = DATA_DIR / "cves"
 SCRAPERS_DIR = DATA_DIR / "scrapers"
 KNOWLEDGE_DIR = DATA_DIR / "knowledge_graph"
@@ -67,7 +68,13 @@ class DataManager:
         if not year_dir.exists():
             return []
         
-        return list(year_dir.glob("*.json"))
+        cve_files = []
+        # Search in subdirectories (0xxx, 1xxx, etc.)
+        for subdir in year_dir.iterdir():
+            if subdir.is_dir():
+                cve_files.extend(list(subdir.glob("*.json")))
+        
+        return sorted(cve_files)
     
     def load_cve_file(self, filepath: Path) -> Optional[Dict[str, Any]]:
         """Load a single CVE file"""

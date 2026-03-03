@@ -4,12 +4,20 @@ export interface Vulnerability {
   id: string;
   cve_id: string;
   title: string;
+  description?: string;
   severity: 'critical' | 'high' | 'medium' | 'low';
   cvss_score?: number;
   vendor?: string;
   product?: string;
+  affected_versions?: string;
   published_date?: string;
-  status: 'open' | 'in_progress' | 'resolved';
+  modified_date?: string;
+  status?: 'open' | 'in_progress' | 'resolved';
+  ai_summary?: string;
+  mitre_tactics?: string;
+  mitre_techniques?: string;
+  exploits_available?: boolean;
+  source_url?: string;
 }
 
 export interface Alert {

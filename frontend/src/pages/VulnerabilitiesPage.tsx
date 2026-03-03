@@ -186,8 +186,8 @@ export function VulnerabilitiesPage() {
     header: 'Status',
     width: '100px',
     render: (item: Vulnerability) =>
-    <span className={`text-xs ${statusColors[item.status]}`}>
-          {item.status.replace('_', ' ').toUpperCase()}
+    <span className={`text-xs ${statusColors[item.status || 'open']}`}>
+          {(item.status || 'open').replace('_', ' ').toUpperCase()}
         </span>
 
   }];
@@ -306,60 +306,112 @@ export function VulnerabilitiesPage() {
                   <h3 className="text-white font-medium mb-2">
                     {selectedVuln.title}
                   </h3>
-                  <div className="flex items-center gap-4 text-sm text-gray-400">
-                    <span>Vendor: {selectedVuln.vendor || 'Unknown'}</span>
-                    <span>Product: {selectedVuln.product || 'Unknown'}</span>
-                    <span>Published: {selectedVuln.published_date ? new Date(selectedVuln.published_date).toLocaleDateString() : 'N/A'}</span>
+                  <div className="flex items-center gap-4 text-sm text-gray-400 flex-wrap">
+                    <span>Vendor: <span className="text-gray-300">{selectedVuln.vendor || 'Unknown'}</span></span>
+                    <span>Product: <span className="text-gray-300">{selectedVuln.product || 'Unknown'}</span></span>
+                    <span>Published: <span className="text-gray-300">{selectedVuln.published_date ? new Date(selectedVuln.published_date).toLocaleDateString() : 'N/A'}</span></span>
                   </div>
                 </div>
 
-                {/* AI Summary */}
+                {/* CVSS Score */}
+                {selectedVuln.cvss_score && (
+                  <div className="bg-terminal-black rounded border border-terminal-green/20 p-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-terminal-amber text-xs">[CVSS_SCORE]</span>
+                      <span className={`text-lg font-bold ${
+                        selectedVuln.cvss_score >= 9 ? 'text-terminal-red' :
+                        selectedVuln.cvss_score >= 7 ? 'text-terminal-amber' :
+                        selectedVuln.cvss_score >= 4 ? 'text-terminal-green' :
+                        'text-gray-400'
+                      }`}>
+                        {selectedVuln.cvss_score.toFixed(1)}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Description */}
                 <div className="bg-terminal-black rounded border border-terminal-green/20 p-4">
                   <div className="flex items-center gap-2 mb-2">
                     <span className="text-terminal-green text-xs">
-                      [AI_SUMMARY]
+                      [DESCRIPTION]
                     </span>
                   </div>
-                  <pre className="text-gray-300 text-sm whitespace-pre-wrap font-mono">
-                    {`This vulnerability allows remote attackers to execute arbitrary 
-code on affected installations. Authentication is not required 
-to exploit this vulnerability.
-
-The specific flaw exists within the processing of serialized 
-data. The issue results from the lack of proper validation of 
-user-supplied data, which can result in deserialization of 
-untrusted data.`}
-                  </pre>
+                  <p className="text-gray-300 text-sm whitespace-pre-wrap">
+                    {selectedVuln.description || 'No description available'}
+                  </p>
                 </div>
 
-                {/* MITRE Mapping */}
-                <div className="bg-terminal-black rounded border border-terminal-green/20 p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-terminal-amber text-xs">
-                      [MITRE_ATT&CK]
-                    </span>
+                {/* AI Summary - Placeholder for now */}
+                {selectedVuln.ai_summary && (
+                  <div className="bg-terminal-black rounded border border-terminal-green/20 p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-terminal-green text-xs">
+                        [AI_SUMMARY]
+                      </span>
+                    </div>
+                    <pre className="text-gray-300 text-sm whitespace-pre-wrap font-mono">
+                      {selectedVuln.ai_summary}
+                    </pre>
                   </div>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex items-center gap-2">
-                      <span className="text-gray-500">Tactic:</span>
-                      <span className="text-terminal-green">
-                        Execution (TA0002)
+                )}
+
+                {/* MITRE Mapping - Placeholder for now */}
+                {selectedVuln.mitre_tactics || selectedVuln.mitre_techniques ? (
+                  <div className="bg-terminal-black rounded border border-terminal-green/20 p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-terminal-amber text-xs">
+                        [MITRE_ATT&CK]
                       </span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-gray-500">Technique:</span>
-                      <span className="text-terminal-green">
-                        Exploitation for Client Execution (T1203)
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-gray-500">Platform:</span>
-                      <span className="text-gray-300">
-                        Windows, Linux, macOS
-                      </span>
+                    <div className="space-y-2 text-sm">
+                      {selectedVuln.mitre_tactics && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-gray-500">Tactic:</span>
+                          <span className="text-terminal-green">
+                            {selectedVuln.mitre_tactics}
+                          </span>
+                        </div>
+                      )}
+                      {selectedVuln.mitre_techniques && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-gray-500">Technique:</span>
+                          <span className="text-terminal-green">
+                            {selectedVuln.mitre_techniques}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="bg-terminal-black rounded border border-terminal-green/20 p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-terminal-amber text-xs">
+                        [MITRE_ATT&CK]
+                      </span>
+                    </div>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex items-center gap-2">
+                        <span className="text-gray-500">Tactic:</span>
+                        <span className="text-terminal-green">
+                          Execution (TA0002)
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-gray-500">Technique:</span>
+                        <span className="text-terminal-green">
+                          Exploitation for Client Execution (T1203)
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-gray-500">Platform:</span>
+                        <span className="text-gray-300">
+                          Windows, Linux, macOS
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Actions */}
                 <div className="flex items-center gap-3 pt-2">
@@ -371,10 +423,16 @@ untrusted data.`}
                   )
                   }
                   icon={<ExternalLinkIcon className="w-4 h-4" />}>
-
                     View on NVD
                   </Button>
-                  <Button variant="secondary">Mark as In Progress</Button>
+                  <Button 
+                    variant="secondary"
+                    onClick={() => {
+                      // TODO: Implement status change
+                      alert('Status change feature coming soon');
+                    }}>
+                    Mark as In Progress
+                  </Button>
                 </div>
               </div>
             </motion.div>
