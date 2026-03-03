@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { XIcon, ExternalLinkIcon } from 'lucide-react';
+import { XIcon, ExternalLinkIcon, PlusIcon, DownloadIcon, RefreshCwIcon, SearchIcon } from 'lucide-react';
 import { TerminalTable } from '../components/ui/TerminalTable';
 import { Button } from '../components/ui/Button';
+import { Modal } from '../components/ui/Modal';
+import { Input } from '../ui/Input';
 import { api, type Vulnerability } from '../services/api';
 
 const severityColors = {
@@ -21,6 +23,18 @@ export function VulnerabilitiesPage() {
   const [selectedVuln, setSelectedVuln] = useState<Vulnerability | null>(null);
   const [severityFilter, setSeverityFilter] = useState<string>('all');
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newVulnerability, setNewVulnerability] = useState({
+    cve_id: '',
+    title: '',
+    severity: 'medium' as 'critical' | 'high' | 'medium' | 'low',
+    cvss_score: undefined as number | undefined,
+    vendor: '',
+    product: '',
+    description: '',
+    status: 'open' as 'open' | 'in_progress' | 'resolved'
+  });
 
   useEffect(() => {
     // Fetch vulnerabilities from backend
@@ -34,6 +48,77 @@ export function VulnerabilitiesPage() {
         setLoading(false);
       });
   }, []);
+
+  const handleRefresh = () => {
+    setLoading(true);
+    api.getVulnerabilities({ limit: 100 })
+      .then((data) => {
+        setVulnerabilities(data);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error('Error refreshing vulnerabilities:', err);
+        setLoading(false);
+      });
+  };
+
+  const handleExport = () => {
+    const dataStr = JSON.stringify(vulnerabilities, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `vulnerabilities-export-${new Date().toISOString().split('T')[0]}.json`;
+    link.click();
+  };
+
+  const handleAddVulnerability = () => {
+    setShowCreateModal(true);
+  };
+
+  const handleConfirmCreate = () => {
+    // Call backend API to create vulnerability
+    fetch('http://localhost:8000/api/vulnerabilities', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(newVulnerability),
+    })
+      .then((response) => {
+        if (!response.ok) throw new Error('Failed to create vulnerability');
+        return response.json();
+      })
+      .then((created) => {
+        setVulnerabilities([...vulnerabilities, created]);
+        setShowCreateModal(false);
+        setNewVulnerability({
+          cve_id: '',
+          title: '',
+          severity: 'medium',
+          cvss_score: undefined,
+          vendor: '',
+          product: '',
+          description: '',
+          status: 'open'
+        });
+        alert('Vulnerability created successfully!');
+      })
+      .catch((err) => {
+        console.error('Error creating vulnerability:', err);
+        alert('Failed to create vulnerability: ' + err.message);
+      });
+  };
+
+  const filteredVulnerabilities = vulnerabilities.filter((vuln) => {
+    const matchesSeverity = severityFilter === 'all' || vuln.severity === severityFilter;
+    const matchesSearch = 
+      searchQuery === '' ||
+      vuln.cve_id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      vuln.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (vuln.vendor && vuln.vendor.toLowerCase().includes(searchQuery.toLowerCase()));
+    return matchesSeverity && matchesSearch;
+  });
 
   const filteredData =
   severityFilter === 'all' ?
@@ -110,10 +195,35 @@ export function VulnerabilitiesPage() {
   return (
     <div className="space-y-6">
       {/* Page Header */}
-      <div className="flex items-center gap-2">
-        <span className="text-terminal-green">&gt;</span>
-        <h1 className="text-xl font-semibold text-white">Vulnerabilities</h1>
-        <span className="text-gray-500 text-sm"> // cve database</span>
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div className="flex items-center gap-2">
+          <span className="text-terminal-green">&gt;</span>
+          <h1 className="text-xl font-semibold text-white">Vulnerabilities</h1>
+          <span className="text-gray-500 text-sm"> // cve database</span>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <Button
+            onClick={handleAddVulnerability}
+            icon={<PlusIcon className="w-4 h-4" />}>
+            Add CVE
+          </Button>
+          
+          <Button
+            onClick={handleExport}
+            icon={<DownloadIcon className="w-4 h-4" />}
+            variant="secondary">
+            Export
+          </Button>
+          
+          <Button
+            onClick={handleRefresh}
+            icon={<RefreshCwIcon className="w-4 h-4" />}
+            variant="secondary"
+            disabled={loading}>
+            {loading ? 'Loading...' : 'Refresh'}
+          </Button>
+        </div>
       </div>
 
       {/* Table */}
@@ -271,6 +381,144 @@ untrusted data.`}
           </motion.div>
         }
       </AnimatePresence>
+
+      {/* Create Vulnerability Modal */}
+      <Modal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        title="Add New Vulnerability">
+        
+        <div className="space-y-4">
+          <div>
+            <label className="block text-gray-400 text-xs mb-2">
+              [CVE_ID]*
+            </label>
+            <input
+              type="text"
+              placeholder="CVE-2024-XXXX"
+              value={newVulnerability.cve_id}
+              onChange={(e) => setNewVulnerability({ ...newVulnerability, cve_id: e.target.value })}
+              className="w-full px-4 py-2 rounded border border-terminal-green/30 bg-terminal-black text-gray-300 outline-none focus:border-terminal-green transition-colors font-mono"
+            />
+          </div>
+
+          <div>
+            <label className="block text-gray-400 text-xs mb-2">
+              [TITLE]*
+            </label>
+            <input
+              type="text"
+              placeholder="Brief description of the vulnerability"
+              value={newVulnerability.title}
+              onChange={(e) => setNewVulnerability({ ...newVulnerability, title: e.target.value })}
+              className="w-full px-4 py-2 rounded border border-terminal-green/30 bg-terminal-black text-gray-300 outline-none focus:border-terminal-green transition-colors"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-gray-400 text-xs mb-2">
+                [SEVERITY]*
+              </label>
+              <select
+                value={newVulnerability.severity}
+                onChange={(e) => setNewVulnerability({ ...newVulnerability, severity: e.target.value as any })}
+                className="w-full px-4 py-2 rounded border border-terminal-green/30 bg-terminal-black text-gray-300 outline-none focus:border-terminal-green transition-colors">
+                
+                <option value="critical">Critical</option>
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-gray-400 text-xs mb-2">
+                [CVSS_SCORE]
+              </label>
+              <input
+                type="number"
+                min="0"
+                max="10"
+                step="0.1"
+                placeholder="0.0 - 10.0"
+                value={newVulnerability.cvss_score || ''}
+                onChange={(e) => setNewVulnerability({ ...newVulnerability, cvss_score: parseFloat(e.target.value) || undefined })}
+                className="w-full px-4 py-2 rounded border border-terminal-green/30 bg-terminal-black text-gray-300 outline-none focus:border-terminal-green transition-colors"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-gray-400 text-xs mb-2">
+                [VENDOR]
+              </label>
+              <input
+                type="text"
+                placeholder="Vendor name"
+                value={newVulnerability.vendor}
+                onChange={(e) => setNewVulnerability({ ...newVulnerability, vendor: e.target.value })}
+                className="w-full px-4 py-2 rounded border border-terminal-green/30 bg-terminal-black text-gray-300 outline-none focus:border-terminal-green transition-colors"
+              />
+            </div>
+
+            <div>
+              <label className="block text-gray-400 text-xs mb-2">
+                [PRODUCT]
+              </label>
+              <input
+                type="text"
+                placeholder="Affected product"
+                value={newVulnerability.product}
+                onChange={(e) => setNewVulnerability({ ...newVulnerability, product: e.target.value })}
+                className="w-full px-4 py-2 rounded border border-terminal-green/30 bg-terminal-black text-gray-300 outline-none focus:border-terminal-green transition-colors"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-gray-400 text-xs mb-2">
+              [DESCRIPTION]
+            </label>
+            <textarea
+              placeholder="Detailed description of the vulnerability..."
+              value={newVulnerability.description}
+              onChange={(e) => setNewVulnerability({ ...newVulnerability, description: e.target.value })}
+              rows={4}
+              className="w-full px-4 py-2 rounded border border-terminal-green/30 bg-terminal-black text-gray-300 outline-none focus:border-terminal-green transition-colors resize-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-gray-400 text-xs mb-2">
+              [STATUS]
+            </label>
+            <select
+              value={newVulnerability.status}
+              onChange={(e) => setNewVulnerability({ ...newVulnerability, status: e.target.value as any })}
+              className="w-full px-4 py-2 rounded border border-terminal-green/30 bg-terminal-black text-gray-300 outline-none focus:border-terminal-green transition-colors">
+              
+              <option value="open">Open</option>
+              <option value="in_progress">In Progress</option>
+              <option value="resolved">Resolved</option>
+            </select>
+          </div>
+
+          <div className="pt-4 flex justify-end gap-3">
+            <Button
+              variant="ghost"
+              onClick={() => setShowCreateModal(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleConfirmCreate}
+              disabled={!newVulnerability.cve_id || !newVulnerability.title}>
+              Create Vulnerability
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {loading && (
         <div className="text-center py-8 text-terminal-green">

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   FileTextIcon,
@@ -6,84 +6,24 @@ import {
   CalendarIcon,
   ClockIcon,
   FolderIcon,
-  FileIcon } from
+  FileIcon,
+  PlusIcon,
+  RefreshCwIcon } from
 'lucide-react';
 import { Modal } from '../components/ui/Modal';
 import { Button } from '../components/ui/Button';
 import { Input } from '../ui/Input';
+import { api } from '../services/api';
+
 interface Report {
   id: string;
   name: string;
   type: 'vulnerability' | 'threat' | 'compliance' | 'incident';
   format: 'PDF' | 'CSV' | 'JSON';
-  size: string;
+  size?: string;
   generated: string;
   status: 'ready' | 'generating' | 'scheduled';
 }
-const reports: Report[] = [
-{
-  id: '1',
-  name: 'Monthly_Vulnerability_Report_Jan2024',
-  type: 'vulnerability',
-  format: 'PDF',
-  size: '2.4 MB',
-  generated: '2024-01-15 08:00',
-  status: 'ready'
-},
-{
-  id: '2',
-  name: 'Threat_Intelligence_Summary_Q1',
-  type: 'threat',
-  format: 'PDF',
-  size: '1.8 MB',
-  generated: '2024-01-14 12:30',
-  status: 'ready'
-},
-{
-  id: '3',
-  name: 'CVE_Export_Full_Database',
-  type: 'vulnerability',
-  format: 'CSV',
-  size: '15.2 MB',
-  generated: '2024-01-13 06:00',
-  status: 'ready'
-},
-{
-  id: '4',
-  name: 'Compliance_Audit_SOC2_2024',
-  type: 'compliance',
-  format: 'PDF',
-  size: '4.1 MB',
-  generated: '2024-01-12 14:00',
-  status: 'ready'
-},
-{
-  id: '5',
-  name: 'Incident_Response_IR2024-001',
-  type: 'incident',
-  format: 'PDF',
-  size: '892 KB',
-  generated: '2024-01-11 16:45',
-  status: 'ready'
-},
-{
-  id: '6',
-  name: 'Weekly_Threat_Feed_Export',
-  type: 'threat',
-  format: 'JSON',
-  size: '3.7 MB',
-  generated: 'Generating...',
-  status: 'generating'
-},
-{
-  id: '7',
-  name: 'Monthly_Executive_Summary_Feb2024',
-  type: 'vulnerability',
-  format: 'PDF',
-  size: '--',
-  generated: 'Scheduled: 2024-02-01',
-  status: 'scheduled'
-}];
 
 const typeColors = {
   vulnerability: 'text-terminal-red',
@@ -97,48 +37,103 @@ const formatIcons = {
   JSON: '{ }'
 };
 export function ReportsPage() {
-  const [reportsList, setReportsList] = useState<Report[]>(reports);
-  const [isGenerateModalOpen, setIsGenerateModalOpen] = useState(false);
-  const [newReportName, setNewReportName] = useState('');
-  const [newReportType, setNewReportType] = useState<
-    'vulnerability' | 'threat' | 'compliance' | 'incident'>(
-    'vulnerability');
-  const [newReportFormat, setNewReportFormat] = useState<
-    'PDF' | 'CSV' | 'JSON'>(
-    'PDF');
-  const handleGenerateReport = () => {
-    if (!newReportName) return;
-    const newReport: Report = {
-      id: Date.now().toString(),
-      name: newReportName.replace(/\s+/g, '_'),
-      type: newReportType,
-      format: newReportFormat,
-      size: '--',
-      generated: 'Generating...',
-      status: 'generating'
-    };
-    setReportsList([newReport, ...reportsList]);
-    setIsGenerateModalOpen(false);
-    setNewReportName('');
-    // Simulate generation completion
-    setTimeout(() => {
-      setReportsList((current) =>
-      current.map((r) =>
-      r.id === newReport.id ?
-      {
-        ...r,
-        status: 'ready',
-        size: '1.2 MB',
-        generated: new Date().
-        toISOString().
-        slice(0, 16).
-        replace('T', ' ')
-      } :
-      r
-      )
-      );
-    }, 3000);
+  const [reportsList, setReportsList] = useState<Report[]>([]);
+  const [showGenerateModal, setShowGenerateModal] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [newReport, setNewReport] = useState<{
+    name: string;
+    type: string;
+    format: string;
+  }>({
+    name: '',
+    type: 'vulnerability',
+    format: 'PDF'
+  });
+
+  useEffect(() => {
+    // Fetch reports from backend
+    api.getReports({ limit: 50 })
+      .then((data) => {
+        setReportsList(data);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error('Error fetching reports:', err);
+        setLoading(false);
+      });
+  }, []);
+
+  const refreshReports = () => {
+    setLoading(true);
+    api.getReports({ limit: 50 })
+      .then((data) => {
+        setReportsList(data);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error('Error refreshing reports:', err);
+        setLoading(false);
+      });
   };
+
+  const handleExportAll = () => {
+    const dataStr = JSON.stringify(reportsList, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `reports-export-${new Date().toISOString().split('T')[0]}.json`;
+    link.click();
+  };
+
+  const handleGenerate = () => {
+    setShowGenerateModal(true);
+  };
+
+  const handleConfirmGenerate = () => {
+    // Call backend API to generate report
+    api.generateReport({
+      name: newReport.name,
+      report_type: newReport.type,
+      format: newReport.format
+    })
+      .then((result) => {
+        setReportsList((current) => [
+          ...current,
+          {
+            name: newReport.name,
+            type: newReport.type as 'vulnerability' | 'threat' | 'compliance' | 'incident',
+            format: newReport.format as 'PDF' | 'CSV' | 'JSON',
+            id: result.id || Date.now().toString(),
+            generated: new Date().toISOString().slice(0, 16).replace('T', ' '),
+            status: 'generating'
+          }
+        ]);
+        setShowGenerateModal(false);
+        setNewReport({ name: '', type: 'vulnerability', format: 'PDF' });
+        
+        // Simulate generation completion
+        setTimeout(() => {
+          setReportsList((current) =>
+            current.map((r) =>
+              r.status === 'generating' ?
+              {
+                ...r,
+                status: 'ready',
+                size: `${(Math.random() * 5 + 1).toFixed(1)} MB`
+              } :
+              r
+            )
+          );
+        }, 3000);
+      })
+      .catch((err) => {
+        console.error('Error generating report:', err);
+        alert('Failed to generate report');
+        setShowGenerateModal(false);
+      });
+  };
+
   return (
     <div className="space-y-6">
       {/* Page Header */}
@@ -149,12 +144,28 @@ export function ReportsPage() {
           <span className="text-gray-500 text-sm"> // generated documents</span>
         </div>
 
-        <Button
-          onClick={() => setIsGenerateModalOpen(true)}
-          icon={<FileTextIcon className="w-4 h-4" />}>
-
-          Generate New Report
-        </Button>
+        <div className="flex items-center gap-3">
+          <Button
+            onClick={handleExportAll}
+            icon={<DownloadIcon className="w-4 h-4" />}
+            variant="secondary">
+            Export All
+          </Button>
+          
+          <Button
+            onClick={refreshReports}
+            icon={<RefreshCwIcon className="w-4 h-4" />}
+            variant="secondary"
+            disabled={loading}>
+            {loading ? 'Loading...' : 'Refresh'}
+          </Button>
+          
+          <Button
+            onClick={handleGenerate}
+            icon={<PlusIcon className="w-4 h-4" />}>
+            Generate Report
+          </Button>
+        </div>
       </div>
 
       {/* Directory Header */}
@@ -279,8 +290,8 @@ export function ReportsPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <motion.button
           onClick={() => {
-            setNewReportType('vulnerability');
-            setIsGenerateModalOpen(true);
+            setNewReport({ ...newReport, type: 'vulnerability' });
+            setShowGenerateModal(true);
           }}
           initial={{
             opacity: 0,
@@ -314,8 +325,8 @@ export function ReportsPage() {
 
         <motion.button
           onClick={() => {
-            setNewReportType('threat');
-            setIsGenerateModalOpen(true);
+            setNewReport({ ...newReport, type: 'threat' });
+            setShowGenerateModal(true);
           }}
           initial={{
             opacity: 0,
@@ -349,8 +360,8 @@ export function ReportsPage() {
 
         <motion.button
           onClick={() => {
-            setNewReportType('compliance');
-            setIsGenerateModalOpen(true);
+            setNewReport({ ...newReport, type: 'compliance' });
+            setShowGenerateModal(true);
           }}
           initial={{
             opacity: 0,
@@ -383,7 +394,7 @@ export function ReportsPage() {
         </motion.button>
 
         <motion.button
-          onClick={() => setIsGenerateModalOpen(true)}
+          onClick={() => setShowGenerateModal(true)}
           initial={{
             opacity: 0,
             y: 20
@@ -417,16 +428,16 @@ export function ReportsPage() {
 
       {/* Generate Report Modal */}
       <Modal
-        isOpen={isGenerateModalOpen}
-        onClose={() => setIsGenerateModalOpen(false)}
+        isOpen={showGenerateModal}
+        onClose={() => setShowGenerateModal(false)}
         title="Generate New Report">
 
         <div className="space-y-4">
           <Input
             label="Report Name"
             placeholder="e.g. Q1_Security_Audit"
-            value={newReportName}
-            onChange={(e) => setNewReportName(e.target.value)} />
+            value={newReport.name}
+            onChange={(e) => setNewReport({ ...newReport, name: e.target.value })} />
 
 
           <div>
@@ -434,8 +445,8 @@ export function ReportsPage() {
               [REPORT_TYPE]
             </label>
             <select
-              value={newReportType}
-              onChange={(e) => setNewReportType(e.target.value as any)}
+              value={newReport.type}
+              onChange={(e) => setNewReport({ ...newReport, type: e.target.value })}
               className="w-full px-4 py-2 rounded border border-terminal-green/30 bg-terminal-black text-gray-300 outline-none focus:border-terminal-green transition-colors">
 
               <option value="vulnerability">Vulnerability</option>
@@ -450,8 +461,8 @@ export function ReportsPage() {
               [EXPORT_FORMAT]
             </label>
             <select
-              value={newReportFormat}
-              onChange={(e) => setNewReportFormat(e.target.value as any)}
+              value={newReport.format}
+              onChange={(e) => setNewReport({ ...newReport, format: e.target.value })}
               className="w-full px-4 py-2 rounded border border-terminal-green/30 bg-terminal-black text-gray-300 outline-none focus:border-terminal-green transition-colors">
 
               <option value="PDF">PDF Document</option>
@@ -463,11 +474,11 @@ export function ReportsPage() {
           <div className="pt-4 flex justify-end gap-3">
             <Button
               variant="ghost"
-              onClick={() => setIsGenerateModalOpen(false)}>
+              onClick={() => setShowGenerateModal(false)}>
 
               Cancel
             </Button>
-            <Button onClick={handleGenerateReport} disabled={!newReportName}>
+            <Button onClick={handleConfirmGenerate} disabled={!newReport.name}>
               Execute Generation
             </Button>
           </div>

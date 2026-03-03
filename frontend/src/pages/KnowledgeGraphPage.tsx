@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   ZoomInIcon,
@@ -9,78 +9,25 @@ import {
   SquareIcon,
   TriangleIcon,
   HexagonIcon,
-  RefreshCwIcon } from
+  RefreshCwIcon,
+  SearchIcon,
+  DownloadIcon } from
 'lucide-react';
 import { Button } from '../components/ui/Button';
-const nodes = [
-{
-  id: 1,
-  type: 'threat_actor',
-  label: 'APT29',
-  x: 200,
-  y: 150
-},
-{
-  id: 2,
-  type: 'malware',
-  label: 'SUNBURST',
-  x: 400,
-  y: 100
-},
-{
-  id: 3,
-  type: 'vulnerability',
-  label: 'CVE-2024-0001',
-  x: 350,
-  y: 250
-},
-{
-  id: 4,
-  type: 'target',
-  label: 'SolarWinds',
-  x: 550,
-  y: 180
-},
-{
-  id: 5,
-  type: 'technique',
-  label: 'T1195.002',
-  x: 300,
-  y: 350
-},
-{
-  id: 6,
-  type: 'malware',
-  label: 'TEARDROP',
-  x: 500,
-  y: 300
-}];
+import { api } from '../services/api';
 
-const edges = [
-{
-  from: 1,
-  to: 2
-},
-{
-  from: 2,
-  to: 3
-},
-{
-  from: 2,
-  to: 4
-},
-{
-  from: 1,
-  to: 5
-},
-{
-  from: 5,
-  to: 6
-},
-{
-  from: 6,
-  to: 4
-}];
+interface GraphNode {
+  id: number | string;
+  type: string;
+  label: string;
+  x?: number;
+  y?: number;
+}
+
+interface GraphEdge {
+  from: number | string;
+  to: number | string;
+}
 
 const nodeColors = {
   threat_actor: '#ef4444',
@@ -122,51 +69,96 @@ const legendItems = [
 }];
 
 export function KnowledgeGraphPage() {
-  const [selectedNode, setSelectedNode] = useState<(typeof nodes)[0] | null>(
-    null
-  );
+  const [nodes, setNodes] = useState<GraphNode[]>([]);
+  const [edges, setEdges] = useState<GraphEdge[]>([]);
+  const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const [zoom, setZoom] = useState(1);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Fetch graph data from backend
+    api.getGraphData()
+      .then((data) => {
+        setNodes(data.nodes || []);
+        setEdges(data.edges || []);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error('Error fetching graph data:', err);
+        setLoading(false);
+      });
+  }, []);
+
+  const refreshGraph = () => {
+    setLoading(true);
+    api.getGraphData()
+      .then((data) => {
+        setNodes(data.nodes || []);
+        setEdges(data.edges || []);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error('Error refreshing graph:', err);
+        setLoading(false);
+      });
+  };
+
+  const handleExportGraph = () => {
+    const dataStr = JSON.stringify({ nodes, edges }, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `knowledge-graph-${new Date().toISOString().split('T')[0]}.json`;
+    link.click();
+  };
+
+  const handleSearchEntity = () => {
+    const query = prompt('Enter entity to search (CVE, vendor, threat actor, etc.):');
+    if (query) {
+      api.searchGraph(query)
+        .then((data) => {
+          setNodes(data.nodes || []);
+          setEdges(data.edges || []);
+        })
+        .catch((err) => {
+          console.error('Search error:', err);
+          alert('No results found');
+        });
+    }
+  };
   return (
     <div className="space-y-6">
       {/* Page Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-2">
           <span className="text-terminal-green">&gt;</span>
           <h1 className="text-xl font-semibold text-white">Knowledge Graph</h1>
-          <span className="text-gray-500 text-sm">
-            {' '}
-            // threat relationships
-          </span>
+          <span className="text-gray-500 text-sm"> // threat relationships</span>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setZoom((z) => Math.max(0.5, z - 0.1))}
-            className="p-2 rounded border border-terminal-green/30 text-gray-400 hover:text-terminal-green hover:border-terminal-green transition-colors">
-
-            <ZoomOutIcon className="w-4 h-4" />
-          </button>
-          <span className="text-terminal-green text-sm px-2">
-            {Math.round(zoom * 100)}%
-          </span>
-          <button
-            onClick={() => setZoom((z) => Math.min(2, z + 0.1))}
-            className="p-2 rounded border border-terminal-green/30 text-gray-400 hover:text-terminal-green hover:border-terminal-green transition-colors">
-
-            <ZoomInIcon className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => {
-              setZoom(1);
-              setSelectedNode(null);
-            }}
-            className="p-2 rounded border border-terminal-green/30 text-gray-400 hover:text-terminal-green hover:border-terminal-green transition-colors"
-            title="Reset View">
-
-            <RefreshCwIcon className="w-4 h-4" />
-          </button>
-          <button className="p-2 rounded border border-terminal-green/30 text-gray-400 hover:text-terminal-green hover:border-terminal-green transition-colors">
-            <FilterIcon className="w-4 h-4" />
-          </button>
+        
+        <div className="flex items-center gap-3">
+          <Button
+            onClick={handleSearchEntity}
+            icon={<SearchIcon className="w-4 h-4" />}
+            variant="secondary">
+            Search
+          </Button>
+          
+          <Button
+            onClick={handleExportGraph}
+            icon={<DownloadIcon className="w-4 h-4" />}
+            variant="secondary">
+            Export
+          </Button>
+          
+          <Button
+            onClick={refreshGraph}
+            icon={<RefreshCwIcon className="w-4 h-4" />}
+            variant="secondary"
+            disabled={loading}>
+            {loading ? 'Loading...' : 'Refresh'}
+          </Button>
         </div>
       </div>
 
@@ -251,10 +243,10 @@ export function KnowledgeGraphPage() {
                 fill={nodeColors[node.type as keyof typeof nodeColors]} />
 
                 <text
-                x={node.x}
-                y={node.y + 40}
-                textAnchor="middle"
-                fill="#e5e5e5"
+                  x={node.x}
+                  y={(node.y || 0) + 40}
+                  textAnchor="middle"
+                  fill="#e5e5e5"
                 fontSize="11"
                 fontFamily="JetBrains Mono">
 

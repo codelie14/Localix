@@ -198,4 +198,16 @@ export const api = {
     if (!response.ok) throw new Error('Failed to fetch graph edges');
     return response.json();
   },
+
+  async getGraphData(): Promise<{ nodes: any[]; edges: any[] }> {
+    const response = await fetch(`${API_BASE_URL}/graph/data`);
+    if (!response.ok) throw new Error('Failed to fetch graph data');
+    return response.json();
+  },
+
+  async searchGraph(query: string): Promise<{ nodes: any[]; edges: any[] }> {
+    const response = await fetch(`${API_BASE_URL}/graph/search?q=${encodeURIComponent(query)}`);
+    if (!response.ok) throw new Error('Failed to search graph');
+    return response.json();
+  },
 };

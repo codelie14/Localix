@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   AlertTriangleIcon,
@@ -6,97 +6,25 @@ import {
   InfoIcon,
   CheckCircleIcon,
   XIcon,
-  FilterIcon } from
+  FilterIcon,
+  RefreshCwIcon,
+  BellIcon,
+  DownloadIcon } from
 'lucide-react';
+import { Button } from '../components/ui/Button';
+import { api, type Alert as AlertType } from '../services/api';
+
 interface Alert {
   id: string;
   timestamp: string;
   title: string;
-  description: string;
+  description?: string;
   severity: 'critical' | 'high' | 'medium' | 'low';
-  source: string;
+  source?: string;
   status: 'active' | 'acknowledged' | 'resolved';
 }
-const alerts: Alert[] = [
-{
-  id: '1',
-  timestamp: '2024-01-15 14:32:18',
-  title: 'Suspicious outbound connection detected',
-  description:
-  'Multiple connections to known C2 server IP addresses from internal host 192.168.1.105',
-  severity: 'critical',
-  source: 'Network Monitor',
-  status: 'active'
-},
-{
-  id: '2',
-  timestamp: '2024-01-15 14:28:45',
-  title: 'Failed login attempts threshold exceeded',
-  description:
-  'User admin@company.com has exceeded 10 failed login attempts in 5 minutes',
-  severity: 'high',
-  source: 'Auth Service',
-  status: 'active'
-},
-{
-  id: '3',
-  timestamp: '2024-01-15 14:15:22',
-  title: 'New vulnerability detected in production',
-  description:
-  'CVE-2024-0001 affects Apache Log4j version running on prod-server-01',
-  severity: 'critical',
-  source: 'Vulnerability Scanner',
-  status: 'acknowledged'
-},
-{
-  id: '4',
-  timestamp: '2024-01-15 14:02:11',
-  title: 'Unusual data transfer volume',
-  description:
-  'Database server db-01 transferred 5GB of data to external IP in last hour',
-  severity: 'high',
-  source: 'DLP System',
-  status: 'active'
-},
-{
-  id: '5',
-  timestamp: '2024-01-15 13:48:33',
-  title: 'SSL certificate expiring soon',
-  description: 'Certificate for api.company.com expires in 7 days',
-  severity: 'medium',
-  source: 'Certificate Monitor',
-  status: 'acknowledged'
-},
-{
-  id: '6',
-  timestamp: '2024-01-15 13:35:09',
-  title: 'Firewall rule change detected',
-  description:
-  'New inbound rule added allowing traffic on port 8080 from any source',
-  severity: 'medium',
-  source: 'Config Monitor',
-  status: 'resolved'
-},
-{
-  id: '7',
-  timestamp: '2024-01-15 13:20:44',
-  title: 'Malware signature detected',
-  description:
-  'Trojan.GenericKD.46789 found in email attachment on user workstation',
-  severity: 'critical',
-  source: 'Endpoint Protection',
-  status: 'resolved'
-},
-{
-  id: '8',
-  timestamp: '2024-01-15 13:05:17',
-  title: 'API rate limit exceeded',
-  description:
-  'External API key exceeded rate limit of 1000 requests per minute',
-  severity: 'low',
-  source: 'API Gateway',
-  status: 'resolved'
-}];
+
+const alerts: Alert[] = [];
 
 const severityConfig = {
   critical: {
@@ -145,30 +73,90 @@ const statusConfig = {
     blink: false
   }
 };
+
 export function AlertsPage() {
-  const [alertsList, setAlertsList] = useState<Alert[]>(alerts);
+  const [alertsList, setAlertsList] = useState<Alert[]>([]);
   const [filter, setFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Fetch alerts from backend
+    api.getAlerts({ limit: 100 })
+      .then((data) => {
+        setAlertsList(data);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error('Error fetching alerts:', err);
+        setLoading(false);
+      });
+  }, []);
+
+  const refreshAlerts = () => {
+    setLoading(true);
+    api.getAlerts({ limit: 100 })
+      .then((data) => {
+        setAlertsList(data);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error('Error refreshing alerts:', err);
+        setLoading(false);
+      });
+  };
+
   const handleStatusChange = (
-  id: string,
-  newStatus: 'acknowledged' | 'resolved') =>
-  {
-    setAlertsList((current) =>
-    current.map((alert) =>
-    alert.id === id ?
-    {
-      ...alert,
-      status: newStatus
-    } :
-    alert
-    )
-    );
+    id: string,
+    newStatus: 'acknowledged' | 'resolved'
+  ) => {
+    api.updateAlertStatus(id, newStatus)
+      .then((updatedAlert) => {
+        setAlertsList((current) =>
+          current.map((alert) =>
+            alert.id === id ? { ...alert, status: newStatus } : alert
+          )
+        );
+      })
+      .catch((err) => {
+        console.error('Error updating alert status:', err);
+        // Fallback to local update
+        setAlertsList((current) =>
+          current.map((alert) =>
+            alert.id === id ? { ...alert, status: newStatus } : alert
+          )
+        );
+      });
   };
   const filteredAlerts = alertsList.filter((alert) => {
     const severityMatch = filter === 'all' || alert.severity === filter;
     const statusMatch = statusFilter === 'all' || alert.status === statusFilter;
     return severityMatch && statusMatch;
   });
+
+  const handleAcknowledgeAll = () => {
+    alertsList
+      .filter(a => a.status === 'active')
+      .forEach(alert => {
+        api.updateAlertStatus(alert.id, 'acknowledged')
+          .catch(err => console.error('Error acknowledging alert:', err));
+      });
+    setAlertsList(current => 
+      current.map(alert => 
+        alert.status === 'active' ? { ...alert, status: 'acknowledged' } : alert
+      )
+    );
+  };
+
+  const handleExportAlerts = () => {
+    const dataStr = JSON.stringify(filteredAlerts, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `alerts-export-${new Date().toISOString().split('T')[0]}.json`;
+    link.click();
+  };
   return (
     <div className="space-y-6">
       {/* Page Header */}
@@ -180,27 +168,27 @@ export function AlertsPage() {
         </div>
 
         <div className="flex items-center gap-3">
-          <select
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            className="px-3 py-2 rounded border border-terminal-green/30 bg-terminal-dark text-gray-300 text-sm outline-none focus:border-terminal-green">
-
-            <option value="all">[ALL SEVERITY]</option>
-            <option value="critical">[CRITICAL]</option>
-            <option value="high">[HIGH]</option>
-            <option value="medium">[MEDIUM]</option>
-            <option value="low">[LOW]</option>
-          </select>
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-3 py-2 rounded border border-terminal-green/30 bg-terminal-dark text-gray-300 text-sm outline-none focus:border-terminal-green">
-
-            <option value="all">[ALL STATUS]</option>
-            <option value="active">[ACTIVE]</option>
-            <option value="acknowledged">[ACKNOWLEDGED]</option>
-            <option value="resolved">[RESOLVED]</option>
-          </select>
+          <Button
+            onClick={handleAcknowledgeAll}
+            icon={<CheckCircleIcon className="w-4 h-4" />}
+            variant="secondary">
+            Ack All
+          </Button>
+          
+          <Button
+            onClick={handleExportAlerts}
+            icon={<DownloadIcon className="w-4 h-4" />}
+            variant="secondary">
+            Export
+          </Button>
+          
+          <Button
+            onClick={refreshAlerts}
+            icon={<RefreshCwIcon className="w-4 h-4" />}
+            variant="secondary"
+            disabled={loading}>
+            {loading ? 'Loading...' : 'Refresh'}
+          </Button>
         </div>
       </div>
 

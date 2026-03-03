@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   GlobeIcon,
@@ -8,78 +8,14 @@ import {
   MapPinIcon,
   ClockIcon,
   SearchIcon,
-  FilterIcon } from
+  FilterIcon,
+  RefreshCwIcon,
+  PlusIcon,
+  DownloadIcon } from
 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Input } from '../ui/Input';
-const threatActors = [
-{
-  name: 'APT29',
-  origin: 'Russia',
-  activity: 'high',
-  targets: ['Government', 'Defense'],
-  lastSeen: '2h ago'
-},
-{
-  name: 'Lazarus Group',
-  origin: 'North Korea',
-  activity: 'medium',
-  targets: ['Finance', 'Crypto'],
-  lastSeen: '5h ago'
-},
-{
-  name: 'APT41',
-  origin: 'China',
-  activity: 'high',
-  targets: ['Healthcare', 'Tech'],
-  lastSeen: '1h ago'
-},
-{
-  name: 'FIN7',
-  origin: 'Russia',
-  activity: 'low',
-  targets: ['Retail', 'Hospitality'],
-  lastSeen: '2d ago'
-},
-{
-  name: 'Sandworm',
-  origin: 'Russia',
-  activity: 'critical',
-  targets: ['Energy', 'Infrastructure'],
-  lastSeen: '30m ago'
-}];
-
-const recentIndicators = [
-{
-  type: 'IP',
-  value: '192.168.1.100',
-  threat: 'C2 Server',
-  confidence: 95
-},
-{
-  type: 'Domain',
-  value: 'malware-c2.evil.com',
-  threat: 'Phishing',
-  confidence: 88
-},
-{
-  type: 'Hash',
-  value: 'a1b2c3d4e5f6...',
-  threat: 'Ransomware',
-  confidence: 99
-},
-{
-  type: 'IP',
-  value: '10.0.0.50',
-  threat: 'Scanner',
-  confidence: 72
-},
-{
-  type: 'URL',
-  value: 'https://fake-bank.com/login',
-  threat: 'Credential Theft',
-  confidence: 91
-}];
+import { api, type ThreatActor, type IndicatorOfCompromise } from '../services/api';
 
 const activityColors = {
   critical: 'text-terminal-red pulse-critical',
@@ -87,17 +23,79 @@ const activityColors = {
   medium: 'text-terminal-green',
   low: 'text-gray-400'
 };
+
 export function ThreatIntelligencePage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState('all');
-  const filteredActors = threatActors.filter((actor) => {
+  const [threats, setThreats] = useState<ThreatActor[]>([]);
+  const [iocs, setIOCs] = useState<IndicatorOfCompromise[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Fetch threat intelligence data from backend
+    Promise.all([
+      api.getThreats({ limit: 50 }),
+      api.getIOCs({ limit: 100 })
+    ])
+      .then(([threatsData, iocsData]) => {
+        setThreats(threatsData);
+        setIOCs(iocsData);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error('Error fetching threat intelligence:', err);
+        setLoading(false);
+      });
+  }, []);
+
+  const filteredActors = threats.filter((actor) => {
     const matchesSearch =
-    actor.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    actor.origin.toLowerCase().includes(searchQuery.toLowerCase());
+      actor.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      actor.origin_country?.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesFilter =
-    activeFilter === 'all' || actor.activity === activeFilter;
+      activeFilter === 'all' || actor.activity_level === activeFilter;
     return matchesSearch && matchesFilter;
   });
+
+  const filteredIOCs = iocs.filter((ioc) => {
+    const matchesSearch = 
+      ioc.value.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      ioc.type.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesSearch;
+  });
+
+  const refreshData = () => {
+    setLoading(true);
+    Promise.all([
+      api.getThreats({ limit: 50 }),
+      api.getIOCs({ limit: 100 })
+    ])
+      .then(([threatsData, iocsData]) => {
+        setThreats(threatsData);
+        setIOCs(iocsData);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error('Error refreshing data:', err);
+        setLoading(false);
+      });
+  };
+
+  const handleAddThreat = () => {
+    alert('Open modal to add new threat actor (to be implemented)');
+    // TODO: Implement create threat modal
+  };
+
+  const handleExportIOCs = () => {
+    // Export IOCs as CSV or JSON
+    const dataStr = JSON.stringify(iocs, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `iocs-export-${new Date().toISOString().split('T')[0]}.json`;
+    link.click();
+  };
   return (
     <div className="space-y-6">
       {/* Page Header */}
@@ -114,8 +112,25 @@ export function ThreatIntelligencePage() {
         </div>
 
         <div className="flex items-center gap-3">
-          <Button variant="ghost" icon={<FilterIcon className="w-4 h-4" />}>
-            Export Data
+          <Button 
+            onClick={handleAddThreat}
+            icon={<PlusIcon className="w-4 h-4" />}>
+            Add Threat
+          </Button>
+          
+          <Button
+            onClick={handleExportIOCs}
+            icon={<DownloadIcon className="w-4 h-4" />}
+            variant="secondary">
+            Export IOCs
+          </Button>
+          
+          <Button
+            onClick={refreshData}
+            icon={<RefreshCwIcon className="w-4 h-4" />}
+            variant="secondary"
+            disabled={loading}>
+            {loading ? 'Loading...' : 'Refresh'}
           </Button>
         </div>
       </div>
@@ -347,25 +362,24 @@ export function ThreatIntelligencePage() {
 
                   <div className="flex items-center gap-3">
                     <div
-                    className={`w-2 h-2 rounded-full ${actor.activity === 'critical' ? 'bg-terminal-red status-blink' : actor.activity === 'high' ? 'bg-terminal-amber' : actor.activity === 'medium' ? 'bg-terminal-green' : 'bg-gray-500'}`} />
+                      className={`w-2 h-2 rounded-full ${actor.activity_level === 'critical' ? 'bg-terminal-red status-blink' : actor.activity_level === 'high' ? 'bg-terminal-amber' : actor.activity_level === 'medium' ? 'bg-terminal-green' : 'bg-gray-500'}`} />
 
                     <div>
                       <p className="text-white font-medium">{actor.name}</p>
                       <div className="flex items-center gap-2 text-xs text-gray-500">
                         <MapPinIcon className="w-3 h-3" />
-                        <span>{actor.origin}</span>
+                        <span>{actor.origin_country || 'Unknown'}</span>
                       </div>
                     </div>
                   </div>
                   <div className="text-right">
                     <p
-                    className={`text-xs font-medium ${activityColors[actor.activity as keyof typeof activityColors]}`}>
-
-                      {actor.activity.toUpperCase()}
+                      className={`text-xs font-medium ${activityColors[actor.activity_level as keyof typeof activityColors]}`}>
+                      {actor.activity_level.toUpperCase()}
                     </p>
                     <div className="flex items-center gap-1 text-xs text-gray-500">
                       <ClockIcon className="w-3 h-3" />
-                      <span>{actor.lastSeen}</span>
+                      <span>{actor.last_seen || 'N/A'}</span>
                     </div>
                   </div>
                 </motion.div>
@@ -424,40 +438,51 @@ export function ThreatIntelligencePage() {
           </div>
 
           <div className="space-y-2">
-            {recentIndicators.map((ioc, index) =>
-            <motion.div
-              key={index}
-              initial={{
-                opacity: 0,
-                x: -20
-              }}
-              animate={{
-                opacity: 1,
-                x: 0
-              }}
-              transition={{
-                delay: 0.6 + index * 0.05
-              }}
-              className="flex items-center justify-between p-3 rounded border border-terminal-green/20 hover:bg-terminal-green/5 transition-colors cursor-pointer font-mono text-sm">
+            {filteredIOCs.map((ioc, index) => (
+              <motion.div
+                key={ioc.id || index}
+                initial={{
+                  opacity: 0,
+                  x: -20
+                }}
+                animate={{
+                  opacity: 1,
+                  x: 0
+                }}
+                transition={{
+                  delay: 0.6 + index * 0.05
+                }}
+                className="flex items-center justify-between p-3 rounded border border-terminal-green/20 hover:bg-terminal-green/5 transition-colors cursor-pointer font-mono text-sm">
 
-                <div className="flex items-center gap-3">
-                  <span className="text-terminal-amber text-xs w-16">
-                    [{ioc.type}]
-                  </span>
-                  <span className="text-gray-300 truncate max-w-[200px]">
-                    {ioc.value}
-                  </span>
-                </div>
-                <div className="flex items-center gap-4">
-                  <span className="text-terminal-red text-xs">
-                    {ioc.threat}
-                  </span>
-                  <span
-                  className={`text-xs ${ioc.confidence >= 90 ? 'text-terminal-green' : ioc.confidence >= 70 ? 'text-terminal-amber' : 'text-gray-400'}`}>
-
-                    {ioc.confidence}%
-                  </span>
-                </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-terminal-amber text-xs w-16">
+                      [{ioc.type}]
+                    </span>
+                    <span className="text-gray-300 truncate max-w-[200px]">
+                      {ioc.value}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <span className="text-terminal-red text-xs">
+                      {ioc.threat_type || 'Unknown'}
+                    </span>
+                    <span
+                      className={`text-xs ${ioc.confidence_score && ioc.confidence_score >= 90 ? 'text-terminal-green' : ioc.confidence_score && ioc.confidence_score >= 70 ? 'text-terminal-amber' : 'text-gray-400'}`}>
+                      {ioc.confidence_score ? `${ioc.confidence_score}%` : 'N/A'}
+                    </span>
+                  </div>
+                </motion.div>
+              ))}
+            {filteredIOCs.length === 0 && (
+              <motion.div
+                initial={{
+                  opacity: 0
+                }}
+                animate={{
+                  opacity: 1
+                }}
+                className="text-center py-8 text-gray-500 text-sm">
+                No IOCs match your search criteria.
               </motion.div>
             )}
           </div>

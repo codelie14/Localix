@@ -77,7 +77,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           className="flex items-center gap-2">
 
           <span className="text-2xl font-bold text-terminal-green neon-green-glow tracking-wider">
-            {collapsed ? 'C' : 'CKI'}
+            {collapsed ? 'LX' : 'LOCALIX'}
           </span>
           {!collapsed &&
           <motion.span
@@ -91,8 +91,6 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
               opacity: 0
             }}
             className="text-xs text-gray-500 mt-1">
-
-              LOCALIX
             </motion.span>
           }
         </motion.div>

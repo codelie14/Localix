@@ -3,7 +3,10 @@ import {
   ShieldAlertIcon,
   BugIcon,
   AlertTriangleIcon,
-  ActivityIcon } from
+  ActivityIcon,
+  RefreshCwIcon,
+  DownloadIcon,
+  DatabaseIcon } from
 'lucide-react';
 import { StatCard } from '../components/ui/StatCard';
 import { VulnerabilityTrendChart } from '../components/charts/VulnerabilityTrendChart';
@@ -11,6 +14,7 @@ import { TopVendorsChart } from '../components/charts/TopVendorsChart';
 import { ThreatCategoriesChart } from '../components/charts/ThreatCategoriesChart';
 import { ThreatFeed } from '../components/dashboard/ThreatFeed';
 import { api, DashboardStats } from '../services/api';
+import { Button } from '../components/ui/Button';
 
 export function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats>({
@@ -20,6 +24,7 @@ export function DashboardPage() {
     active_alerts: 0
   });
   const [loading, setLoading] = useState(true);
+  const [scraperRunning, setScraperRunning] = useState(false);
 
   useEffect(() => {
     // Fetch dashboard statistics from backend
@@ -34,6 +39,34 @@ export function DashboardPage() {
       });
   }, []);
 
+  const handleRefresh = () => {
+    setLoading(true);
+    api.getDashboardStats()
+      .then((data) => {
+        setStats(data);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error('Error refreshing stats:', err);
+        setLoading(false);
+      });
+  };
+
+  const handleRunScraper = () => {
+    setScraperRunning(true);
+    api.runScraper()
+      .then((result) => {
+        alert(`Scraper completed! Found ${result.items_found || 0} items.`);
+        setScraperRunning(false);
+        handleRefresh(); // Refresh dashboard stats
+      })
+      .catch((err) => {
+        console.error('Scraper error:', err);
+        alert('Scraper failed: ' + err.message);
+        setScraperRunning(false);
+      });
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -45,10 +78,34 @@ export function DashboardPage() {
   return (
     <div className="space-y-6">
       {/* Page Header */}
-      <div className="flex items-center gap-2">
-        <span className="text-terminal-green">&gt;</span>
-        <h1 className="text-xl font-semibold text-white">Dashboard</h1>
-        <span className="text-gray-500 text-sm"> // system overview</span>
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div className="flex items-center gap-2">
+          <span className="text-terminal-green">&gt;</span>
+          <h1 className="text-xl font-semibold text-white">Dashboard</h1>
+          <span className="text-gray-500 text-sm"> // system overview</span>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <Button
+            onClick={handleRunScraper}
+            icon={<DatabaseIcon className="w-4 h-4" />}
+            disabled={scraperRunning}>
+            {scraperRunning ? 'Scraping...' : 'Run Scraper'}
+          </Button>
+          
+          <Button
+            onClick={handleRefresh}
+            icon={<RefreshCwIcon className="w-4 h-4" />}
+            variant="secondary">
+            Refresh
+          </Button>
+          
+          <Button
+            icon={<DownloadIcon className="w-4 h-4" />}
+            variant="secondary">
+            Export
+          </Button>
+        </div>
       </div>
 
       {/* Stat Cards */}
