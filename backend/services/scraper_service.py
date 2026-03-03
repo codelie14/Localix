@@ -6,6 +6,7 @@ import json
 from typing import List, Dict, Any, Optional
 from urllib.parse import urljoin, urlparse
 import time
+from pathlib import Path
 
 
 class ScraperService:
@@ -16,6 +17,10 @@ class ScraperService:
         self.session.headers.update({
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         })
+        
+        # Data directory for saving scraped content
+        self.data_dir = Path(__file__).parent.parent / "data" / "scrapers"
+        self.data_dir.mkdir(parents=True, exist_ok=True)
         
         # Default sources - can be extended via API
         self.sources = [
@@ -64,7 +69,7 @@ class ScraperService:
             return {"error": str(e), "url": url}
     
     async def run_all_scrapers(self) -> List[Dict[str, Any]]:
-        """Run all configured scrapers"""
+        """Run all configured scrapers and save results to data directory"""
         results = []
         
         for source in self.sources:
@@ -73,6 +78,9 @@ class ScraperService:
                 result["source_name"] = source["name"]
                 result["source_type"] = source["type"]
                 results.append(result)
+                
+                # Save scraped data to file
+                self._save_scraper_result(source["name"], result)
                 
                 # Rate limiting
                 time.sleep(2)
@@ -85,6 +93,28 @@ class ScraperService:
                 })
         
         return results
+    
+    def _save_scraper_result(self, source_name: str, result: Dict[str, Any]) -> Path:
+        """Save scraper result to data directory"""
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"{source_name.replace(' ', '_').lower()}_{timestamp}.json"
+        filepath = self.data_dir / filename
+        
+        # Add metadata
+        output = {
+            "source": source_name,
+            "scraped_at": result.get("scraped_at", datetime.now().isoformat()),
+            "type": result.get("type", "unknown"),
+            "count": result.get("count", 0),
+            "data": result.get("data", []),
+            "metadata": result.get("metadata", {})
+        }
+        
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(output, f, indent=2, ensure_ascii=False)
+        
+        print(f"✅ Saved {result.get('count', 0)} items to {filepath}")
+        return filepath
     
     async def _parse_nvd(self, html: str, url: str) -> Dict[str, Any]:
         """Parse NVD NIST CVE data"""

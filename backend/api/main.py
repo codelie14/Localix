@@ -14,6 +14,8 @@ sys.path.insert(0, backend_dir)
 from database import engine, get_db
 from services import ollama_service, scraper_service
 from scheduler import start_schedulers
+from data_manager import data_manager
+from models import models
 import models
 import schemas
 
@@ -328,6 +330,82 @@ async def get_graph_edges(db: Session = Depends(get_db)):
     """Get all edges for knowledge graph visualization"""
     # TODO: Implement relationship mapping
     return {"edges": []}
+
+
+# Data Management Endpoints
+@app.get("/api/data/stats")
+async def get_data_stats():
+    """Get data directory statistics"""
+    stats = data_manager.get_statistics()
+    return stats
+
+
+@app.get("/api/data/cves/years")
+async def list_cve_years():
+    """List all years with CVE data"""
+    years = data_manager.list_cve_years()
+    return {"years": years, "count": len(years)}
+
+
+@app.get("/api/data/cves/{year}")
+async def get_cves_for_year(year: int, limit: int = 50):
+    """Get CVE files for a specific year"""
+    cve_files = data_manager.get_cve_files_for_year(year)
+    cves = []
+    
+    for cve_file in cve_files[:limit]:
+        cve_data = data_manager.load_cve_file(cve_file)
+        if cve_data:
+            cves.append(cve_data)
+    
+    return {
+        "year": year,
+        "count": len(cves),
+        "total_available": len(cve_files),
+        "cves": cves
+    }
+
+
+@app.post("/api/data/cves/import")
+async def import_cve_database(
+    source_path: str,
+    user: dict = Depends(get_current_user)
+):
+    """Import CVE database from external source"""
+    try:
+        from pathlib import Path
+        source = Path(source_path)
+        
+        if not source.exists():
+            raise HTTPException(status_code=400, detail="Source path does not exist")
+        
+        result = data_manager.import_cve_database(source)
+        
+        return {
+            "status": "success",
+            "message": f"Imported {result['files_imported']} CVE files",
+            "details": result
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/data/scraper/outputs")
+async def list_scraper_outputs():
+    """List all scraper output files"""
+    outputs = data_manager.list_scraper_outputs()
+    return {"outputs": outputs, "count": len(outputs)}
+
+
+@app.get("/api/data/knowledge/latest")
+async def get_latest_knowledge_graph():
+    """Get the latest knowledge graph"""
+    graph = data_manager.load_latest_graph()
+    
+    if not graph:
+        return {"nodes": [], "edges": []}
+    
+    return graph
 
 
 # Startup event
