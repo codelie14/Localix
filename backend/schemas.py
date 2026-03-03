@@ -132,12 +132,17 @@ class ArticleCreate(ArticleBase):
     pass
 
 
+# AI Analysis Schemas
 class ArticleAnalysisRequest(BaseModel):
     content: str
 
 
 class TextExtractionRequest(BaseModel):
     text: str
+
+
+class ModelSwitchRequest(BaseModel):
+    model_name: str
 
 
 class Article(ArticleBase):

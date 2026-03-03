@@ -1,14 +1,33 @@
 import ollama
 import json
 from typing import Dict, List, Any
+import os
 
 
 class OllamaService:
     """Service for interacting with Ollama AI models"""
     
     def __init__(self):
-        self.model = "llama3.2"  # Default model, can be configured
-        self.host = "http://localhost:11434"
+        # Preferred models as per project requirements
+        self.model = os.getenv("OLLAMA_MODEL", "llama3.1:8b")  # or ministral-3:3b
+        self.host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+        self.available_models = ["llama3.1:8b", "ministral-3:3b", "llama3.2:3b"]
+    
+    def set_model(self, model_name: str) -> bool:
+        """Switch to a different AI model"""
+        if model_name in self.available_models:
+            self.model = model_name
+            return True
+        return False
+    
+    async def check_connection(self) -> bool:
+        """Verify Ollama is running and accessible"""
+        try:
+            response = ollama.list()
+            return len(response.get('models', [])) > 0
+        except Exception as e:
+            print(f"Ollama connection check failed: {e}")
+            return False
     
     async def analyze_article(self, content: str) -> Dict[str, Any]:
         """

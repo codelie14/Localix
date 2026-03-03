@@ -1,108 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { XIcon, ExternalLinkIcon } from 'lucide-react';
 import { TerminalTable } from '../components/ui/TerminalTable';
 import { Button } from '../components/ui/Button';
-interface Vulnerability {
-  id: string;
-  cveId: string;
-  title: string;
-  severity: 'critical' | 'high' | 'medium' | 'low';
-  cvss: number;
-  vendor: string;
-  product: string;
-  published: string;
-  status: 'open' | 'in_progress' | 'resolved';
-}
-const vulnerabilities: Vulnerability[] = [
-{
-  id: '1',
-  cveId: 'CVE-2024-0001',
-  title: 'Remote Code Execution in Apache Log4j',
-  severity: 'critical',
-  cvss: 9.8,
-  vendor: 'Apache',
-  product: 'Log4j',
-  published: '2024-01-10',
-  status: 'open'
-},
-{
-  id: '2',
-  cveId: 'CVE-2024-0002',
-  title: 'SQL Injection in WordPress Plugin',
-  severity: 'high',
-  cvss: 8.1,
-  vendor: 'WordPress',
-  product: 'WooCommerce',
-  published: '2024-01-09',
-  status: 'in_progress'
-},
-{
-  id: '3',
-  cveId: 'CVE-2024-0003',
-  title: 'XSS Vulnerability in React Framework',
-  severity: 'medium',
-  cvss: 6.5,
-  vendor: 'Meta',
-  product: 'React',
-  published: '2024-01-08',
-  status: 'resolved'
-},
-{
-  id: '4',
-  cveId: 'CVE-2024-0004',
-  title: 'Buffer Overflow in OpenSSL',
-  severity: 'critical',
-  cvss: 9.1,
-  vendor: 'OpenSSL',
-  product: 'OpenSSL',
-  published: '2024-01-07',
-  status: 'open'
-},
-{
-  id: '5',
-  cveId: 'CVE-2024-0005',
-  title: 'Authentication Bypass in Cisco IOS',
-  severity: 'high',
-  cvss: 7.8,
-  vendor: 'Cisco',
-  product: 'IOS',
-  published: '2024-01-06',
-  status: 'in_progress'
-},
-{
-  id: '6',
-  cveId: 'CVE-2024-0006',
-  title: 'Information Disclosure in Microsoft Edge',
-  severity: 'low',
-  cvss: 4.3,
-  vendor: 'Microsoft',
-  product: 'Edge',
-  published: '2024-01-05',
-  status: 'resolved'
-},
-{
-  id: '7',
-  cveId: 'CVE-2024-0007',
-  title: 'Privilege Escalation in Linux Kernel',
-  severity: 'high',
-  cvss: 7.5,
-  vendor: 'Linux',
-  product: 'Kernel',
-  published: '2024-01-04',
-  status: 'open'
-},
-{
-  id: '8',
-  cveId: 'CVE-2024-0008',
-  title: 'Denial of Service in Nginx',
-  severity: 'medium',
-  cvss: 5.9,
-  vendor: 'Nginx',
-  product: 'Nginx',
-  published: '2024-01-03',
-  status: 'in_progress'
-}];
+import { api, type Vulnerability } from '../services/api';
 
 const severityColors = {
   critical: 'text-terminal-red bg-terminal-red/10 border-terminal-red/30',
@@ -116,19 +17,35 @@ const statusColors = {
   resolved: 'text-terminal-green'
 };
 export function VulnerabilitiesPage() {
+  const [vulnerabilities, setVulnerabilities] = useState<Vulnerability[]>([]);
   const [selectedVuln, setSelectedVuln] = useState<Vulnerability | null>(null);
   const [severityFilter, setSeverityFilter] = useState<string>('all');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Fetch vulnerabilities from backend
+    api.getVulnerabilities({ limit: 100 })
+      .then((data) => {
+        setVulnerabilities(data);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error('Error fetching vulnerabilities:', err);
+        setLoading(false);
+      });
+  }, []);
+
   const filteredData =
   severityFilter === 'all' ?
   vulnerabilities :
   vulnerabilities.filter((v) => v.severity === severityFilter);
   const columns = [
   {
-    key: 'cveId',
+    key: 'cve_id',
     header: 'CVE ID',
     width: '140px',
     render: (item: Vulnerability) =>
-    <span className="text-terminal-green font-mono">{item.cveId}</span>
+    <span className="text-terminal-green font-mono">{item.cve_id}</span>
 
   },
   {
@@ -153,27 +70,31 @@ export function VulnerabilitiesPage() {
 
   },
   {
-    key: 'cvss',
+    key: 'cvss_score',
     header: 'CVSS',
     width: '80px',
     render: (item: Vulnerability) =>
     <span
       className={
-      item.cvss >= 9 ?
+      item.cvss_score && item.cvss_score >= 9 ?
       'text-terminal-red' :
-      item.cvss >= 7 ?
+      item.cvss_score && item.cvss_score >= 7 ?
       'text-terminal-amber' :
       'text-terminal-green'
       }>
 
-          {item.cvss.toFixed(1)}
+          {item.cvss_score?.toFixed(1) || 'N/A'}
         </span>
 
   },
   {
     key: 'vendor',
     header: 'Vendor',
-    width: '120px'
+    width: '120px',
+    render: (item: Vulnerability) =>
+    <span className="text-gray-300">
+          {item.vendor || 'Unknown'}
+        </span>
   },
   {
     key: 'status',
@@ -253,7 +174,7 @@ export function VulnerabilitiesPage() {
               <div className="flex items-center justify-between p-4 border-b border-terminal-green/20">
                 <div className="flex items-center gap-3">
                   <span className="text-terminal-green font-mono text-lg">
-                    {selectedVuln.cveId}
+                    {selectedVuln.cve_id}
                   </span>
                   <span
                   className={`px-2 py-1 rounded text-xs font-medium border ${severityColors[selectedVuln.severity]}`}>
@@ -276,9 +197,9 @@ export function VulnerabilitiesPage() {
                     {selectedVuln.title}
                   </h3>
                   <div className="flex items-center gap-4 text-sm text-gray-400">
-                    <span>Vendor: {selectedVuln.vendor}</span>
-                    <span>Product: {selectedVuln.product}</span>
-                    <span>Published: {selectedVuln.published}</span>
+                    <span>Vendor: {selectedVuln.vendor || 'Unknown'}</span>
+                    <span>Product: {selectedVuln.product || 'Unknown'}</span>
+                    <span>Published: {selectedVuln.published_date ? new Date(selectedVuln.published_date).toLocaleDateString() : 'N/A'}</span>
                   </div>
                 </div>
 
@@ -335,7 +256,7 @@ untrusted data.`}
                   <Button
                   onClick={() =>
                   window.open(
-                    `https://nvd.nist.gov/vuln/detail/${selectedVuln.cveId}`,
+                    `https://nvd.nist.gov/vuln/detail/${selectedVuln.cve_id}`,
                     '_blank'
                   )
                   }
@@ -350,6 +271,12 @@ untrusted data.`}
           </motion.div>
         }
       </AnimatePresence>
+
+      {loading && (
+        <div className="text-center py-8 text-terminal-green">
+          Loading vulnerabilities...
+        </div>
+      )}
     </div>);
 
 }

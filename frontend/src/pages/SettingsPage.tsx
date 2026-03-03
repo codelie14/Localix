@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   UserIcon,
@@ -8,10 +8,13 @@ import {
   KeyIcon,
   GlobeIcon,
   SaveIcon,
-  RefreshCwIcon } from
+  RefreshCwIcon,
+  CpuIcon,
+  BotIcon } from
 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Input } from '../ui/Input';
+import { api } from '../services/api';
 export function SettingsPage() {
   const [activeTab, setActiveTab] = useState('profile');
   const [notifications, setNotifications] = useState({
@@ -22,11 +25,49 @@ export function SettingsPage() {
     medium: false,
     low: false
   });
+  const [aiModels, setAiModels] = useState<{current_model: string; available_models: string[]} | null>(null);
+  const [selectedModel, setSelectedModel] = useState('llama3.1:8b');
+  const [ollamaStatus, setOllamaStatus] = useState<'connected' | 'disconnected'>('disconnected');
+
+  useEffect(() => {
+    // Fetch AI models on mount
+    fetch('http://localhost:8000/api/ai/models')
+      .then(res => res.json())
+      .then(data => {
+        setAiModels(data);
+        setSelectedModel(data.current_model);
+        setOllamaStatus('connected');
+      })
+      .catch(() => {
+        setOllamaStatus('disconnected');
+      });
+  }, []);
+
+  const handleModelSwitch = () => {
+    fetch('http://localhost:8000/api/ai/model/switch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model_name: selectedModel })
+    })
+      .then(res => res.json())
+      .then(data => {
+        alert(`AI Model switched to: ${data.model}`);
+      })
+      .catch(err => {
+        alert('Failed to switch model: ' + err.message);
+      });
+  };
+
   const tabs = [
   {
     id: 'profile',
     label: 'Profile',
     icon: UserIcon
+  },
+  {
+    id: 'ai',
+    label: 'AI Models',
+    icon: BotIcon
   },
   {
     id: 'notifications',
@@ -189,6 +230,113 @@ export function SettingsPage() {
 
                   Reset
                 </Button>
+              </div>
+            </div>
+          }
+
+          {/* AI Models Tab */}
+          {activeTab === 'ai' &&
+          <div className="space-y-6">
+              <div className="flex items-center gap-2 mb-6">
+                <span className="text-gray-500 text-xs">[</span>
+                <span className="text-gray-400 text-xs uppercase tracking-wider">
+                  AI Model Configuration
+                </span>
+                <span className="text-gray-500 text-xs">]</span>
+              </div>
+
+              {/* Ollama Status */}
+              <div className={`p-4 rounded border ${ollamaStatus === 'connected' ? 'border-terminal-green/30 bg-terminal-green/10' : 'border-terminal-red/30 bg-terminal-red/10'}`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <BotIcon className={`w-6 h-6 ${ollamaStatus === 'connected' ? 'text-terminal-green' : 'text-terminal-red'}`} />
+                    <div>
+                      <p className="text-white font-medium">Ollama AI Service</p>
+                      <p className={`text-sm ${ollamaStatus === 'connected' ? 'text-terminal-green' : 'text-terminal-red'}`}>
+                        {ollamaStatus === 'connected' ? 'Connected and ready' : 'Disconnected - Install Ollama from ollama.ai'}
+                      </p>
+                    </div>
+                  </div>
+                  <span className={`px-3 py-1 rounded text-xs font-bold ${ollamaStatus === 'connected' ? 'bg-terminal-green text-black' : 'bg-terminal-red text-white'}`}>
+                    {ollamaStatus.toUpperCase()}
+                  </span>
+                </div>
+              </div>
+
+              {/* Model Selection */}
+              {aiModels && aiModels.available_models && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-gray-400 text-xs mb-2">
+                      [CURRENT_MODEL]
+                    </label>
+                    <div className="p-3 rounded border border-terminal-green/30 bg-terminal-black">
+                      <p className="text-terminal-green font-mono">{aiModels.current_model}</p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-gray-400 text-xs mb-2">
+                      [AVAILABLE_MODELS]
+                    </label>
+                    <div className="space-y-2">
+                      {aiModels.available_models.map((model) => (
+                        <label key={model} className="flex items-center gap-3 p-3 rounded border border-terminal-green/20 bg-terminal-black cursor-pointer hover:bg-terminal-green/5 transition-colors">
+                          <input
+                            type="radio"
+                            name="ai_model"
+                            value={model}
+                            checked={selectedModel === model}
+                            onChange={(e) => setSelectedModel(e.target.value)}
+                            className="accent-terminal-green"
+                          />
+                          <span className="text-gray-300 font-mono">{model}</span>
+                          {model === aiModels.current_model && (
+                            <span className="ml-auto text-terminal-green text-xs">● ACTIVE</span>
+                          )}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="pt-4 flex items-center gap-3">
+                    <Button 
+                      onClick={handleModelSwitch}
+                      icon={<RefreshCwIcon className="w-4 h-4" />}
+                      disabled={selectedModel === aiModels.current_model}
+                    >
+                      Switch Model
+                    </Button>
+                    <p className="text-gray-500 text-xs">
+                      Model switch will take effect immediately for new analysis requests
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Model Information */}
+              <div className="pt-6 border-t border-terminal-green/20">
+                <p className="text-gray-400 text-xs mb-4">[MODEL_CAPABILITIES]</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="p-4 rounded border border-terminal-green/20 bg-terminal-black">
+                    <h4 className="text-terminal-green font-medium mb-2">Llama 3.1 8B</h4>
+                    <ul className="text-gray-400 text-xs space-y-1">
+                      <li>• Technical analysis & summarization</li>
+                      <li>• CVE extraction & classification</li>
+                      <li>• MITRE ATT&CK mapping</li>
+                      <li>• IOC detection</li>
+                    </ul>
+                  </div>
+                  <div className="p-4 rounded border border-terminal-amber/20 bg-terminal-black">
+                    <h4 className="text-terminal-amber font-medium mb-2">Ministral 3B</h4>
+                    <ul className="text-gray-400 text-xs space-y-1">
+                      <li>• Faster inference</li>
+                      <li>• Lower resource usage</li>
+                      <li>• Good for quick analysis</li>
+                      <li>• Suitable for real-time processing</li>
+                    </ul>
+                  </div>
+                </div>
               </div>
             </div>
           }

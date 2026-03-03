@@ -187,6 +187,25 @@ async def get_dashboard_stats(db: Session = Depends(get_db)):
 
 
 # AI Analysis Endpoints
+@app.get("/api/ai/models")
+async def get_available_models():
+    """Get list of available AI models"""
+    return {
+        "current_model": ollama_service.model,
+        "available_models": ollama_service.available_models
+    }
+
+@app.post("/api/ai/model/switch")
+async def switch_ai_model(
+    model_request: schemas.ModelSwitchRequest
+):
+    """Switch to a different AI model"""
+    success = ollama_service.set_model(model_request.model_name)
+    if success:
+        return {"status": "success", "model": ollama_service.model}
+    else:
+        raise HTTPException(status_code=400, detail="Model not available")
+
 @app.post("/api/analyze/article")
 async def analyze_article(
     article_data: schemas.ArticleAnalysisRequest,

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ShieldAlertIcon,
   BugIcon,
@@ -10,7 +10,38 @@ import { VulnerabilityTrendChart } from '../components/charts/VulnerabilityTrend
 import { TopVendorsChart } from '../components/charts/TopVendorsChart';
 import { ThreatCategoriesChart } from '../components/charts/ThreatCategoriesChart';
 import { ThreatFeed } from '../components/dashboard/ThreatFeed';
+import { api, DashboardStats } from '../services/api';
+
 export function DashboardPage() {
+  const [stats, setStats] = useState<DashboardStats>({
+    total_vulnerabilities: 0,
+    critical_vulnerabilities: 0,
+    active_threats: 0,
+    active_alerts: 0
+  });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Fetch dashboard statistics from backend
+    api.getDashboardStats()
+      .then((data) => {
+        setStats(data);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error('Error fetching stats:', err);
+        setLoading(false);
+      });
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-terminal-green text-xl">Loading dashboard...</div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Page Header */}
@@ -24,7 +55,7 @@ export function DashboardPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           title="Total Vulnerabilities"
-          value={1247}
+          value={stats.total_vulnerabilities}
           icon={BugIcon}
           trend={{
             value: 12,
@@ -35,7 +66,7 @@ export function DashboardPage() {
 
         <StatCard
           title="Critical Issues"
-          value={23}
+          value={stats.critical_vulnerabilities}
           icon={AlertTriangleIcon}
           trend={{
             value: 8,
@@ -46,7 +77,7 @@ export function DashboardPage() {
 
         <StatCard
           title="Active Threats"
-          value={156}
+          value={stats.active_threats}
           icon={ShieldAlertIcon}
           trend={{
             value: 5,
@@ -57,7 +88,7 @@ export function DashboardPage() {
 
         <StatCard
           title="Systems Monitored"
-          value={89}
+          value={stats.active_alerts}
           icon={ActivityIcon}
           trend={{
             value: 3,
